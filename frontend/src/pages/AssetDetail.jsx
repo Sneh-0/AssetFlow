@@ -43,6 +43,7 @@ export default function AssetDetail() {
   const [showEdit, setShowEdit] = useState(false);
   const [edit, setEdit] = useState({});
   const [imageMode, setImageMode] = useState('url');
+  const [activePhoto, setActivePhoto] = useState(null);
 
   const reload = () => api(`/assets/${id}`).then((a) => { setAsset(a); setEdit({ name: a.name, condition: a.condition, location: a.location || '', is_bookable: a.is_bookable, image_url: a.image_url || '' }); });
   useEffect(() => { reload(); }, [id]);
@@ -197,12 +198,49 @@ export default function AssetDetail() {
         <h2 className="font-semibold mb-2">Maintenance History</h2>
         {asset.maintenance.length === 0 && <p className="text-sm text-gray-400">No maintenance records.</p>}
         {asset.maintenance.map((m) => (
-          <div key={m.id} className="text-sm py-2 border-t border-gray-100 flex justify-between">
-            <span>{m.issue} <span className="text-gray-400">({m.priority}, by {m.raised_by_name})</span></span>
-            <span className="capitalize text-gray-500">{m.status.replace('_', ' ')}</span>
+          <div key={m.id} className="text-sm py-3 border-t border-gray-100 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              {m.photo_url ? (
+                <img
+                  src={m.photo_url}
+                  alt="Issue"
+                  className="h-10 w-10 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-85 transition-opacity"
+                  onClick={() => setActivePhoto(m.photo_url)}
+                />
+              ) : (
+                <div className="h-10 w-10 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-xs text-gray-300 font-bold">
+                  —
+                </div>
+              )}
+              <div>
+                <div className="font-medium text-gray-800">{m.issue}</div>
+                <div className="text-xs text-gray-400">
+                  Priority: <span className="capitalize font-semibold text-gray-500">{m.priority}</span> · raised by {m.raised_by_name}
+                </div>
+              </div>
+            </div>
+            <span className="capitalize text-gray-500 font-medium text-xs bg-gray-100 px-2 py-1 rounded">{m.status.replace('_', ' ')}</span>
           </div>
         ))}
       </div>
+
+      {/* Lightbox Modal for Photo Preview */}
+      {activePhoto && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in"
+          onClick={() => setActivePhoto(null)}
+        >
+          <div className="relative max-w-3xl max-h-[85vh] bg-white p-2 rounded-xl shadow-2xl overflow-hidden">
+            <img src={activePhoto} alt="Maintenance Issue Preview" className="max-w-full max-h-[80vh] object-contain rounded-lg" />
+            <button
+              onClick={() => setActivePhoto(null)}
+              className="absolute top-4 right-4 bg-black/50 text-white rounded-full p-2 hover:bg-black/70 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

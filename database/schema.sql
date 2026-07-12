@@ -95,6 +95,16 @@ CREATE TABLE bookings (
   CHECK (end_time > start_time)
 );
 
+CREATE TABLE technicians (
+  id          SERIAL PRIMARY KEY,
+  name        TEXT NOT NULL,
+  email       TEXT UNIQUE,
+  phone       TEXT,
+  specialty   TEXT,
+  status      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE maintenance_requests (
   id          SERIAL PRIMARY KEY,
   asset_id    INTEGER NOT NULL REFERENCES assets(id),
@@ -104,7 +114,7 @@ CREATE TABLE maintenance_requests (
   photo_url   TEXT,
   status      TEXT NOT NULL DEFAULT 'pending'
               CHECK (status IN ('pending','approved','rejected','assigned','in_progress','resolved')),
-  technician  TEXT,
+  technician_id INTEGER REFERENCES technicians(id),
   decided_by  INTEGER REFERENCES users(id),
   decided_at  TIMESTAMPTZ,
   resolved_at TIMESTAMPTZ,
@@ -164,3 +174,37 @@ CREATE INDEX idx_assets_status ON assets(status);
 CREATE INDEX idx_bookings_asset_time ON bookings(asset_id, start_time, end_time);
 CREATE INDEX idx_notifications_user ON notifications(user_id, read);
 CREATE INDEX idx_allocations_asset ON allocations(asset_id);
+
+-- Enforce that employees can only raise maintenance requests for assets allocated to them
+CREATE OR REPLACE FUNCTION check_maintenance_request_allocation()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_role TEXT;
+  v_allocated BOOLEAN;
+BEGIN
+  -- Get the role of the user raising the request
+  SELECT role INTO v_role FROM users WHERE id = NEW.raised_by;
+  
+  -- If the user is an employee, verify they have an active allocation for this asset
+  IF v_role = 'employee' THEN
+    SELECT EXISTS (
+      SELECT 1 FROM allocations 
+      WHERE asset_id = NEW.asset_id 
+        AND employee_id = NEW.raised_by 
+        AND status = 'active'
+    ) INTO v_allocated;
+    
+    IF NOT v_allocated THEN
+      RAISE EXCEPTION 'Employees can only raise maintenance requests for assets currently allocated to them.';
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER enforce_maintenance_request_allocation
+BEFORE INSERT ON maintenance_requests
+FOR EACH ROW
+EXECUTE FUNCTION check_maintenance_request_allocation();
+

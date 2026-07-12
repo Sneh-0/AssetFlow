@@ -32,8 +32,14 @@ VALUES (4, 'asset_assigned', 'Dell Latitude 5440 (AF-0001) has been assigned to 
 INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
 VALUES (2, 'allocation.created', 'asset', 1, 'AF-0001 allocated to Priya');
 
+INSERT INTO technicians (id, name, email, phone, specialty) VALUES
+  (1, 'Rajesh Kumar', 'rajesh.k@assetflow.com', '+91 98765 43210', 'Electronics & Hardware'),
+  (2, 'Sarah Dsouza', 'sarah.d@assetflow.com', '+91 98765 43211', 'IT & Networking'),
+  (3, 'Amit Sharma', 'amit.s@assetflow.com', '+91 98765 43212', 'HVAC & Facilities');
+
 -- Explicit IDs above bypass the sequences — resync them so the app's next INSERTs don't collide
 SELECT setval('departments_id_seq', (SELECT MAX(id) FROM departments));
 SELECT setval('users_id_seq',       (SELECT MAX(id) FROM users));
 SELECT setval('categories_id_seq',  (SELECT MAX(id) FROM categories));
 SELECT setval('assets_id_seq',      (SELECT MAX(id) FROM assets));
+SELECT setval('technicians_id_seq', (SELECT MAX(id) FROM technicians));

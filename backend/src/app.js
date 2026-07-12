@@ -9,6 +9,8 @@ import bookingRoutes from './routes/bookings.js';
 import maintenanceRoutes from './routes/maintenance.js';
 import auditRoutes from './routes/audits.js';
 import miscRoutes from './routes/misc.js';
+import technicianRoutes from './routes/technicians.js';
+
 
 dotenv.config();
 
@@ -31,6 +33,7 @@ app.use('/api/allocations', allocationRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/audits', auditRoutes);
+app.use('/api/technicians', technicianRoutes);
 app.use('/api', miscRoutes);
 
 // Central error handler — route handlers just throw

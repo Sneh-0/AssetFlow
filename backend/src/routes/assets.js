@@ -46,9 +46,19 @@ router.get('/:id', ah(async (req, res) => {
      LEFT JOIN users by_u ON by_u.id = al.allocated_by
      WHERE al.asset_id = $1 ORDER BY al.allocated_at DESC`, [req.params.id]);
 
-  const { rows: maintenance } = await query(
-    `SELECT m.*, u.name AS raised_by_name FROM maintenance_requests m
-     JOIN users u ON u.id = m.raised_by WHERE m.asset_id = $1 ORDER BY m.created_at DESC`, [req.params.id]);
+  let maintenanceQuery = `SELECT m.*, u.name AS raised_by_name, t.name AS technician_name 
+                          FROM maintenance_requests m
+                          JOIN users u ON u.id = m.raised_by 
+                          LEFT JOIN technicians t ON t.id = m.technician_id
+                          WHERE m.asset_id = $1`;
+  const mParams = [req.params.id];
+  if (req.user.role === 'employee') {
+    mParams.push(req.user.id);
+    maintenanceQuery += ` AND m.raised_by = $2`;
+  }
+  maintenanceQuery += ` ORDER BY m.created_at DESC`;
+
+  const { rows: maintenance } = await query(maintenanceQuery, mParams);
 
   res.json({ ...asset, allocations, maintenance });
 }));
