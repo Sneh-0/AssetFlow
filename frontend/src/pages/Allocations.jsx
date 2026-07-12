@@ -130,16 +130,14 @@ export default function Allocations() {
 
   const canManage = ['admin', 'asset_manager', 'dept_head'].includes(user.role);
 
-  // Dept head can only approve/reject transfers where the destination is their department
+  // Dept head can only approve/reject transfers where the destination is their department;
+  // admins and asset managers can decide any transfer.
   const canDecideTransfer = (t) => {
     if (['admin', 'asset_manager'].includes(user.role)) return true;
     if (user.role === 'dept_head') {
-      // Allow if the transfer target employee is in their dept, or target dept matches their dept
-      const targetDeptId = t.to_department_id;
-      const targetEmployeeDeptId = t.to_employee_dept_id;
       return (
-        (targetDeptId && targetDeptId === user.department_id) ||
-        (targetEmployeeDeptId && targetEmployeeDeptId === user.department_id)
+        (t.to_department_id && t.to_department_id === user.department_id) ||
+        (t.to_employee_dept_id && t.to_employee_dept_id === user.department_id)
       );
     }
     return false;
@@ -288,18 +286,6 @@ export default function Allocations() {
 
       {/* Transfer Requests */}
       <div className="card">
-        <h2 className="font-semibold mb-3">Transfer Requests</h2>
-        {transfers.length === 0 && <p className="text-sm text-gray-400">No transfer requests.</p>}
-        {transfers.map((t) => (
-          <div key={t.id} className="flex items-center justify-between text-sm py-2 border-t border-gray-100">
-            <span>{t.asset_tag} → {t.to_employee_name || t.to_department_name} <span className="text-gray-400">by {t.requested_by_name}</span></span>
-            <span className="flex items-center gap-2">
-              <span className={`badge ${t.status === 'pending' ? 'bg-amber-100 text-amber-700' : t.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{t.status}</span>
-              {t.status === 'pending' && canDecideTransfer(t) && (<>
-                <button className="btn-secondary" onClick={() => decideTransfer(t.id, 'approve')}>Approve</button>
-                <button className="btn-secondary" onClick={() => decideTransfer(t.id, 'reject')}>Reject</button>
-              </>)}
-            </span>
         <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
           <Icon path={ICONS.transfer} className="h-3.5 w-3.5" /> Transfer Requests
           {pendingTransfers > 0 && (
@@ -326,7 +312,7 @@ export default function Allocations() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className={`badge capitalize ${TRANSFER_BADGE[t.status]}`}>{t.status}</span>
-                  {t.status === 'pending' && canManage && (
+                  {t.status === 'pending' && canDecideTransfer(t) && (
                     <>
                       <button
                         className="px-2.5 py-1.5 text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-lg border border-emerald-200 transition-all cursor-pointer"

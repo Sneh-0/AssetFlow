@@ -60,6 +60,7 @@ export default function AssetDetail() {
   const [imageMode, setImageMode] = useState('url');
   const [confirm, setConfirm] = useState(null); // { type: 'transition'|'delete', status? }
   const [busy, setBusy] = useState(false);
+  const [activePhoto, setActivePhoto] = useState(null);
   const qrRef = useRef(null);
 
   const reload = () => api(`/assets/${id}`).then((a) => {
