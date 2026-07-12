@@ -40,7 +40,7 @@ export default function Maintenance() {
   const toast = useToast();
   const [requests, setRequests] = useState(null);
   const [assets, setAssets] = useState([]);
-  const [form, setForm] = useState({ asset_id: '', issue: '', priority: 'medium', photo_url: '' });
+  const [form, setForm] = useState({ asset_id: '', issue: '', priority: 'medium' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [activePhoto, setActivePhoto] = useState(null);
@@ -53,8 +53,6 @@ export default function Maintenance() {
   // Filters
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
-
-  const fileInputRef = useRef(null);
 
   const load = () => {
     api('/maintenance').then(setRequests).catch((e) => setError(e.message));

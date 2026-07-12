@@ -60,7 +60,7 @@ router.use(requireAuth);
 
 // Search/filter: ?q=<tag|serial|name>&category=&status=&location=&bookable=true
 router.get('/', ah(async (req, res) => {
-  const { q, category, status, location, bookable } = req.query;
+  const { q, category, status, location, bookable, department } = req.query;
   const where = [];
   const params = [];
   if (q) { params.push(`%${q}%`); where.push(`(a.asset_tag ILIKE $${params.length} OR a.serial_number ILIKE $${params.length} OR a.name ILIKE $${params.length})`); }
@@ -68,6 +68,15 @@ router.get('/', ah(async (req, res) => {
   if (status) { params.push(status); where.push(`a.status = $${params.length}`); }
   if (location) { params.push(`%${location}%`); where.push(`a.location ILIKE $${params.length}`); }
   if (bookable === 'true') where.push(`a.is_bookable = true`);
+  if (department) {
+    params.push(department);
+    where.push(`EXISTS (
+      SELECT 1 FROM allocations al2
+      JOIN users u2 ON u2.id = al2.employee_id
+      WHERE al2.asset_id = a.id AND al2.status = 'active'
+      AND (al2.department_id = $${params.length} OR u2.department_id = $${params.length})
+    )`);
+  }
 
   const { rows } = await query(
     `SELECT a.*, c.name AS category_name,
@@ -97,19 +106,9 @@ router.get('/:id', ah(async (req, res) => {
      LEFT JOIN users by_u ON by_u.id = al.allocated_by
      WHERE al.asset_id = $1 ORDER BY al.allocated_at DESC`, [req.params.id]);
 
-  let maintenanceQuery = `SELECT m.*, u.name AS raised_by_name, t.name AS technician_name 
-                          FROM maintenance_requests m
-                          JOIN users u ON u.id = m.raised_by 
-                          LEFT JOIN technicians t ON t.id = m.technician_id
-                          WHERE m.asset_id = $1`;
-  const mParams = [req.params.id];
-  if (req.user.role === 'employee') {
-    mParams.push(req.user.id);
-    maintenanceQuery += ` AND m.raised_by = $2`;
-  }
-  maintenanceQuery += ` ORDER BY m.created_at DESC`;
-
-  const { rows: maintenance } = await query(maintenanceQuery, mParams);
+  const { rows: maintenance } = await query(
+    `SELECT m.*, u.name AS raised_by_name FROM maintenance_requests m
+     JOIN users u ON u.id = m.raised_by WHERE m.asset_id = $1 ORDER BY m.created_at DESC`, [req.params.id]);
 
   res.json({ ...asset, allocations, maintenance });
 }));

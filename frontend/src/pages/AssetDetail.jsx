@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
+import { jsPDF } from 'jspdf';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import { useToast } from '../components/Toast';
@@ -60,7 +61,6 @@ export default function AssetDetail() {
   const [confirm, setConfirm] = useState(null); // { type: 'transition'|'delete', status? }
   const [busy, setBusy] = useState(false);
   const qrRef = useRef(null);
-  const [activePhoto, setActivePhoto] = useState(null);
 
   const reload = () => api(`/assets/${id}`).then((a) => {
     setAsset(a);
@@ -98,6 +98,8 @@ export default function AssetDetail() {
     a.click();
     URL.revokeObjectURL(a.href);
   };
+  // ─────────────────────────────────────────────────────────────
+
 
   const handleFile = async (e) => {
     const file = e.target.files[0];
