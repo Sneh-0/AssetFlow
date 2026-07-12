@@ -50,7 +50,7 @@ router.post('/categories', requireRole('admin'), ah(async (req, res) => {
   if (!name) return res.status(400).json({ error: 'name is required' });
   const { rows: [cat] } = await query(
     `INSERT INTO categories (name, description, custom_fields) VALUES ($1, $2, $3) RETURNING *`,
-    [name, description || null, custom_fields || []]);
+    [name, description || null, JSON.stringify(custom_fields || [])]);
   await logActivity(req.user.id, 'category.created', 'category', cat.id, name);
   res.status(201).json(cat);
 }));
@@ -60,7 +60,7 @@ router.put('/categories/:id', requireRole('admin'), ah(async (req, res) => {
   const { rows: [cat] } = await query(
     `UPDATE categories SET name = COALESCE($1, name), description = COALESCE($2, description),
      custom_fields = COALESCE($3, custom_fields) WHERE id = $4 RETURNING *`,
-    [name, description, custom_fields ?? null, req.params.id]);
+    [name, description, custom_fields ? JSON.stringify(custom_fields) : null, req.params.id]);
   if (!cat) return res.status(404).json({ error: 'Category not found' });
   res.json(cat);
 }));

@@ -47,9 +47,9 @@ router.get('/activity', ah(async (req, res) => {
   res.json(rows);
 }));
 
-// Reports & Analytics (Screen 9) — starter queries; P4 extends these
+// Reports & Analytics (Screen 9) — recharts + booking heatmap
 router.get('/reports', ah(async (req, res) => {
-  const [byStatus, byDept, maintFreq, mostUsed] = await Promise.all([
+  const [byStatus, byDept, maintFreq, mostUsed, heatmap] = await Promise.all([
     query(`SELECT status, COUNT(*)::int AS count FROM assets GROUP BY status ORDER BY count DESC`),
     query(`SELECT COALESCE(d.name, ud.name, 'Unassigned') AS department, COUNT(*)::int AS count
            FROM allocations al
@@ -63,13 +63,18 @@ router.get('/reports', ah(async (req, res) => {
     query(`SELECT a.asset_tag, a.name, COUNT(al.id)::int AS allocation_count
            FROM assets a LEFT JOIN allocations al ON al.asset_id = a.id
            GROUP BY a.id ORDER BY allocation_count DESC LIMIT 10`),
+    query(`SELECT EXTRACT(DOW FROM start_time)::int AS day,
+                  EXTRACT(HOUR FROM start_time)::int AS hour,
+                  COUNT(*)::int AS count
+           FROM bookings WHERE status != 'cancelled'
+           GROUP BY 1, 2 ORDER BY 1, 2`),
   ]);
   res.json({
     assets_by_status: byStatus.rows,
     department_allocation: byDept.rows,
     maintenance_frequency: maintFreq.rows,
     most_used_assets: mostUsed.rows,
-    // TODO(P4): booking heatmap (bookings grouped by day-of-week + hour), export to CSV
+    booking_heatmap: heatmap.rows,
   });
 }));
 
