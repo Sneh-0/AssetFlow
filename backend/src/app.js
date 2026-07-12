@@ -25,6 +25,14 @@ const origins = process.env.CORS_ORIGIN
 app.use(cors({ origin: origins }));
 app.use(express.json());
 
+// Normalize URLs on Vercel so Express routes match correctly
+app.use((req, res, next) => {
+  if (req.url && !req.url.startsWith('/api')) {
+    req.url = '/api' + req.url;
+  }
+  next();
+});
+
 app.get('/api/health', (req, res) => res.json({ ok: true, service: 'assetflow' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/org', orgRoutes);
