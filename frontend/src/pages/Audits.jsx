@@ -336,10 +336,10 @@ export default function Audits() {
     <div className="space-y-5 max-w-screen-xl">
 
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Asset Auditing</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Schedule cycles, assign auditors, record verifications, and resolve discrepancies.</p>
+          <p className="text-sm text-gray-400 mt-0.5">Schedule cycles, assign auditors, record verifications, and resolve discrepancies.</p>
         </div>
         {canCreate && (
           <button onClick={() => setShowCreateModal(true)} className="btn flex items-center gap-2 cursor-pointer shadow-sm">
@@ -352,7 +352,7 @@ export default function Audits() {
       {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg p-3 border border-red-100">{error}</div>}
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 stagger">
         {[
           { label: 'Total Cycles',    val: totalCyclesCount,       icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600' },
           { label: 'Active Audits',   val: openCyclesCount,        icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600' },

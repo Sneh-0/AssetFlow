@@ -100,7 +100,7 @@ router.get('/activity', ah(async (req, res) => {
 
 // Reports & Analytics (Screen 9) — starter queries; P4 extends these
 router.get('/reports', ah(async (req, res) => {
-  const [byStatus, byDept, maintFreq, mostUsed, bookingHeatmap] = await Promise.all([
+  const [byStatus, byDept, maintFreq, mostUsed, bookingHeatmap, idleAssets, warrantyExpiring] = await Promise.all([
     query(`SELECT status, COUNT(*)::int AS count FROM assets GROUP BY status ORDER BY count DESC`),
     query(`SELECT COALESCE(d.name, ud.name, 'Unassigned') AS department, COUNT(*)::int AS count
            FROM allocations al
@@ -131,6 +131,20 @@ router.get('/reports', ah(async (req, res) => {
            WHERE b.status = 'approved' AND b.start_time >= CURRENT_DATE - INTERVAL '45 days'
            GROUP BY 1, 2
            ORDER BY 1, 2`),
+    query(`SELECT a.asset_tag, a.name, c.name AS category_name, COUNT(al.id)::int AS allocation_count
+           FROM assets a
+           JOIN categories c ON c.id = a.category_id
+           LEFT JOIN allocations al ON al.asset_id = a.id
+           WHERE a.status NOT IN ('retired', 'disposed', 'lost')
+           GROUP BY a.id, c.name
+           HAVING COUNT(al.id) = 0
+           ORDER BY a.asset_tag LIMIT 10`),
+    query(`SELECT asset_tag, name, warranty_expiry, (warranty_expiry < CURRENT_DATE) AS expired
+           FROM assets
+           WHERE warranty_expiry IS NOT NULL
+             AND warranty_expiry < CURRENT_DATE + 90
+             AND status NOT IN ('retired', 'disposed', 'lost')
+           ORDER BY warranty_expiry LIMIT 10`),
   ]);
   res.json({
     assets_by_status: byStatus.rows,
@@ -138,6 +152,8 @@ router.get('/reports', ah(async (req, res) => {
     maintenance_frequency: maintFreq.rows,
     most_used_assets: mostUsed.rows,
     bookings_heatmap: bookingHeatmap.rows,
+    idle_assets: idleAssets.rows,
+    warranty_expiring: warrantyExpiring.rows,
   });
 }));
 

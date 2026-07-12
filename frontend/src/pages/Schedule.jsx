@@ -1,149 +1,172 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { useAuth } from '../AuthContext';
+import { Icon, ICONS, PageHeader, ErrorBanner, EmptyState, CardSkeleton } from '../components/ui';
 
-const Icon = ({ path, className = 'h-5 w-5' }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
-    <path strokeLinecap="round" strokeLinejoin="round" d={path} />
-  </svg>
-);
+const BLOCK_COLORS = [
+  'from-indigo-500 to-violet-500',
+  'from-sky-500 to-cyan-500',
+  'from-emerald-500 to-teal-500',
+  'from-amber-500 to-orange-500',
+  'from-rose-500 to-pink-500',
+  'from-violet-500 to-fuchsia-500',
+];
 
-const ICONS = {
-  bookings: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-};
+const dayStartOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
 export default function Schedule() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [data, setData] = useState(null);
+  const [bookings, setBookings] = useState(null);
   const [error, setError] = useState('');
+  const [day, setDay] = useState(dayStartOf(new Date()));
+  const [nowTick, setNowTick] = useState(new Date());
 
   useEffect(() => {
-    api('/dashboard')
-      .then(setData)
-      .catch((e) => setError(e.message));
+    api('/bookings').then(setBookings).catch((e) => setError(e.message));
+    const t = setInterval(() => setNowTick(new Date()), 60_000); // keep the now-line moving
+    return () => clearInterval(t);
   }, []);
 
-  if (error) return <div className="p-4 text-red-600 bg-red-50 rounded-lg">{error}</div>;
-  if (!data) return (
-    <div className="flex items-center justify-center h-64 text-gray-400">
-      <svg className="animate-spin h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-      </svg>
-      Loading schedule…
-    </div>
-  );
+  const dayEnd = useMemo(() => { const e = new Date(day); e.setDate(e.getDate() + 1); return e; }, [day]);
+  const isToday = dayStartOf(new Date()).getTime() === day.getTime();
 
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayEnd = new Date(todayStart);
-  todayEnd.setDate(todayEnd.getDate() + 1);
+  const resources = useMemo(() => {
+    const dayBookings = (bookings || [])
+      .filter((b) => b.status === 'approved')
+      .map((b) => ({ ...b, start_time: new Date(b.start_time), end_time: new Date(b.end_time) }))
+      .filter((b) => b.start_time < dayEnd && b.end_time > day);
+    return Array.from(
+      dayBookings.reduce((map, b) => {
+        const key = b.asset_tag || b.asset_name || b.id;
+        if (!map.has(key)) map.set(key, { asset_tag: b.asset_tag, asset_name: b.asset_name || 'Unknown resource', bookings: [] });
+        map.get(key).bookings.push(b);
+        return map;
+      }, new Map()).values()
+    );
+  }, [bookings, day, dayEnd]);
 
-  const todayBookings = data.booking_timeline
-    .map((booking) => ({
-      ...booking,
-      start_time: new Date(booking.start_time),
-      end_time: new Date(booking.end_time),
-    }))
-    .filter((booking) => booking.start_time < todayEnd && booking.end_time > todayStart);
-
-  const resources = Array.from(
-    todayBookings.reduce((map, booking) => {
-      const key = booking.asset_tag || booking.asset_name || booking.id;
-      if (!map.has(key)) {
-        map.set(key, {
-          asset_tag: booking.asset_tag,
-          asset_name: booking.asset_name || 'Unknown resource',
-          bookings: [],
-        });
-      }
-      map.get(key).bookings.push(booking);
-      return map;
-    }, new Map()).values()
-  );
-
-  const hours = Array.from({ length: 24 }, (_, index) => index);
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const shiftDay = (delta) => setDay((d) => { const n = new Date(d); n.setDate(n.getDate() + delta); return n; });
+  const nowPct = ((nowTick.getHours() + nowTick.getMinutes() / 60) / 24) * 100;
 
   return (
-    <div className="space-y-6 max-w-7xl">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Today’s Booking Schedule</h1>
-          <p className="text-sm text-slate-500">A full-width view of today’s approved bookings and resource occupancy.</p>
+    <div className="space-y-5">
+      <PageHeader title="Booking Schedule" subtitle="Approved bookings by resource across the day — spot free slots at a glance.">
+        <Link to="/bookings" className="btn">
+          <Icon path={ICONS.calendar} /> Book Resource
+        </Link>
+      </PageHeader>
+
+      <ErrorBanner message={error} onDismiss={() => setError('')} />
+
+      {/* Day navigation */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+          <button onClick={() => shiftDay(-1)} className="px-3 py-2 hover:bg-slate-50 cursor-pointer text-slate-500 transition-colors">
+            <Icon path={ICONS.chevronL} className="h-4 w-4" />
+          </button>
+          <div className="px-4 py-2 text-sm font-semibold text-slate-800 border-x border-slate-200 min-w-44 text-center tabular-nums">
+            {day.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'long' })}
+          </div>
+          <button onClick={() => shiftDay(1)} className="px-3 py-2 hover:bg-slate-50 cursor-pointer text-slate-500 transition-colors">
+            <Icon path={ICONS.chevronR} className="h-4 w-4" />
+          </button>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => navigate(-1)} className="btn-secondary">Back to Dashboard</button>
-          <Link to="/bookings" className="btn inline-flex items-center gap-2">
-            <Icon path={ICONS.bookings} className="h-4 w-4" /> Book Resource
-          </Link>
-        </div>
+        {!isToday && (
+          <button onClick={() => setDay(dayStartOf(new Date()))} className="btn-secondary !py-2">Today</button>
+        )}
+        {isToday && (
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
+          </span>
+        )}
+        <span className="ml-auto text-xs text-slate-400 font-semibold">
+          {resources.length} resource{resources.length !== 1 ? 's' : ''} · {resources.reduce((n, r) => n + r.bookings.length, 0)} booking{resources.reduce((n, r) => n + r.bookings.length, 0) !== 1 ? 's' : ''}
+        </span>
       </div>
 
-      <div className="card overflow-x-auto">
-        <div className="min-w-230">
-          <div className="grid grid-cols-[200px_repeat(24,minmax(0,1fr))] gap-0 text-xs font-semibold uppercase tracking-wide text-slate-500 border-b border-slate-200">
-            <div className="px-4 py-3">Resource</div>
-            {hours.map((hour) => (
-              <div key={hour} className="border-l border-slate-200 px-3 py-3 text-center">{hour}:00</div>
-            ))}
+      {/* Timeline */}
+      <div className="card p-0 overflow-hidden">
+        {!bookings ? (
+          <div className="p-5 space-y-3">
+            <CardSkeleton className="h-16" /><CardSkeleton className="h-16" /><CardSkeleton className="h-16" />
           </div>
-          <div className="space-y-3 py-3">
-            {resources.map((resource) => (
-              <div key={resource.asset_tag || resource.asset_name} className="relative grid grid-cols-[200px_repeat(24,minmax(0,1fr))] rounded-3xl border border-slate-200 bg-slate-50 shadow-sm overflow-hidden">
-                <div className="border-r border-slate-200 bg-white px-4 py-4">
-                  <div className="text-sm font-semibold text-slate-900">{resource.asset_name}</div>
-                  <div className="text-xs text-slate-500">{resource.asset_tag || '—'}</div>
+        ) : resources.length === 0 ? (
+          <EmptyState icon={ICONS.calendar} title={`Nothing booked on ${day.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+            sub="Approved bookings for this day will appear here as timeline blocks.">
+            <Link to="/bookings" className="btn"><Icon path={ICONS.plus} /> Book a Resource</Link>
+          </EmptyState>
+        ) : (
+          <div className="overflow-x-auto">
+            <div className="min-w-[1100px]">
+              {/* Hour ruler */}
+              <div className="grid grid-cols-[180px_1fr] border-b border-slate-200 bg-slate-50/70">
+                <div className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">Resource</div>
+                <div className="relative h-9">
+                  {hours.map((h) => (
+                    <span key={h} className="absolute top-0 bottom-0 border-l border-slate-200/80 text-[10px] text-slate-400 font-semibold pl-1 pt-2.5 tabular-nums"
+                      style={{ left: `${(h / 24) * 100}%` }}>
+                      {h % 2 === 0 ? `${String(h).padStart(2, '0')}:00` : ''}
+                    </span>
+                  ))}
                 </div>
-                <div className="relative col-span-24 bg-white py-4">
-                  <div className="absolute inset-y-0 left-0 right-0 grid grid-cols-24">
-                    {hours.map((hour) => (
-                      <div key={hour} className="border-l border-slate-200" />
-                    ))}
+              </div>
+
+              {/* Rows */}
+              {resources.map((resource, ri) => (
+                <div key={resource.asset_tag || resource.asset_name} className="grid grid-cols-[180px_1fr] border-b border-slate-100 last:border-0">
+                  <div className="px-4 py-3.5 border-r border-slate-100">
+                    <div className="text-sm font-semibold text-slate-800 truncate">{resource.asset_name}</div>
+                    <div className="text-[11px] text-slate-400 font-mono">{resource.asset_tag || '—'}</div>
                   </div>
-                  {resource.bookings.map((booking) => {
-                    const start = booking.start_time < todayStart ? todayStart : booking.start_time;
-                    const end = booking.end_time > todayEnd ? todayEnd : booking.end_time;
-                    const startHour = start.getHours() + start.getMinutes() / 60;
-                    const duration = Math.max((end.getHours() + end.getMinutes() / 60) - startHour, 0.5);
-                    const left = `${(startHour / 24) * 100}%`;
-                    const width = `${(duration / 24) * 100}%`;
-                    const title = booking.purpose || booking.booked_by_name || booking.asset_name;
-                    return (
-                      <div
-                        key={booking.id}
-                        className="group absolute top-3 h-12 rounded-none bg-linear-to-r from-indigo-600 to-sky-500 px-3 py-2 text-[12px] text-white shadow-lg"
-                        style={{ left, width }}
-                      >
-                        <div className="flex h-full flex-col justify-center overflow-hidden">
-                          <div className="truncate font-semibold">{title}</div>
-                          <div className="mt-0.5 text-[10px] text-slate-100/90">
-                            {booking.start_time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {booking.end_time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <div className="relative h-[68px]">
+                    {/* hour gridlines */}
+                    {hours.map((h) => (
+                      <span key={h} className={`absolute top-0 bottom-0 border-l ${h % 6 === 0 ? 'border-slate-200' : 'border-slate-100'}`} style={{ left: `${(h / 24) * 100}%` }} />
+                    ))}
+                    {/* now line */}
+                    {isToday && (
+                      <span className="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-10 pointer-events-none" style={{ left: `${nowPct}%` }}>
+                        <span className="absolute -top-0 -left-[3px] w-2 h-2 rounded-full bg-rose-500" />
+                      </span>
+                    )}
+                    {/* bookings */}
+                    {resource.bookings.map((b) => {
+                      const start = b.start_time < day ? day : b.start_time;
+                      const end = b.end_time > dayEnd ? dayEnd : b.end_time;
+                      const startHour = start.getHours() + start.getMinutes() / 60;
+                      const endHour = end.getTime() === dayEnd.getTime() ? 24 : end.getHours() + end.getMinutes() / 60;
+                      const width = Math.max(endHour - startHour, 0.5);
+                      const color = BLOCK_COLORS[ri % BLOCK_COLORS.length];
+                      return (
+                        <div
+                          key={b.id}
+                          className={`group absolute top-2.5 bottom-2.5 rounded-lg bg-gradient-to-r ${color} px-2.5 py-1 text-white shadow-md hover:shadow-lg hover:z-20 transition-shadow cursor-default`}
+                          style={{ left: `${(startHour / 24) * 100}%`, width: `${(width / 24) * 100}%` }}
+                        >
+                          <div className="flex h-full flex-col justify-center overflow-hidden">
+                            <div className="truncate text-[11px] font-bold leading-tight">{b.purpose || b.booked_by_name || 'Booked'}</div>
+                            <div className="truncate text-[10px] opacity-90">
+                              {b.start_time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}–{b.end_time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                          {/* hover card */}
+                          <div className="pointer-events-none absolute left-0 top-full mt-1.5 hidden w-64 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xl group-hover:block z-30">
+                            <div className="text-xs font-bold text-slate-900 truncate">{b.purpose || 'Booking'}</div>
+                            <div className="mt-1.5 space-y-0.5 text-[11px] text-slate-600">
+                              <div><span className="font-semibold text-slate-400">By:</span> {b.booked_by_name || '—'}</div>
+                              <div><span className="font-semibold text-slate-400">Time:</span> {b.start_time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {b.end_time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                              <div><span className="font-semibold text-slate-400">Resource:</span> {resource.asset_name} ({resource.asset_tag || '—'})</div>
+                            </div>
                           </div>
                         </div>
-                        <div className="pointer-events-none absolute left-0 -bottom-1 hidden w-72 translate-y-full rounded border border-slate-200 bg-white p-3 text-left text-xs text-slate-700 shadow-lg group-hover:block">
-                          <div className="mb-1 font-semibold text-slate-900 truncate">{booking.purpose || booking.asset_name || 'Booking'}</div>
-                          <div className="text-[11px] text-slate-500">{booking.asset_tag ? `Tag: ${booking.asset_tag}` : 'Tag: —'}</div>
-                          <div className="mt-2 text-[11px] leading-5">
-                            <div><span className="font-semibold">Booked by:</span> {booking.booked_by_name || '—'}</div>
-                            <div><span className="font-semibold">Time:</span> {booking.start_time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {booking.end_time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                            <div><span className="font-semibold">Purpose:</span> {booking.purpose || '—'}</div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
-            {resources.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
-                No approved bookings are scheduled for today.
-              </div>
-            )}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
