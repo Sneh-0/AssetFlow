@@ -101,11 +101,37 @@ export default function Dashboard() {
   const upcomingReturns = data?.upcoming_returns ?? [];
   const myAssets = data?.my_assets ?? [];
   const recentActivity = data?.recent_activity ?? [];
+  const bookingTimeline = data?.booking_timeline ?? [];
   const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
+  const todayBookings = bookingTimeline
+    .map((booking) => ({
+      ...booking,
+      start_time: new Date(booking.start_time),
+      end_time: new Date(booking.end_time),
+    }))
+    .filter((booking) => booking.start_time < todayEnd && booking.end_time > todayStart);
+  const resources = Array.from(
+    todayBookings.reduce((map, booking) => {
+      const key = booking.asset_tag || booking.asset_name || booking.id;
+      if (!map.has(key)) {
+        map.set(key, {
+          asset_tag: booking.asset_tag,
+          asset_name: booking.asset_name || 'Unknown resource',
+          bookings: [],
+        });
+      }
+      map.get(key).bookings.push(booking);
+      return map;
+    }, new Map()).values()
+  );
+  const hours = Array.from({ length: 24 }, (_, index) => index);
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
-    <div className="space-y-6 max-w-screen-xl">
+    <div className="space-y-6 max-w-7xl">
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -155,6 +181,35 @@ export default function Dashboard() {
             </Link>
           );
         })}
+      </div>
+
+      <div className="mx-auto w-full max-w-6xl">
+        <div className="card">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Today’s Booking Schedule</h2>
+              <p className="text-sm text-slate-500">Open the full schedule page for a better view of today’s bookings.</p>
+            </div>
+            <Link to="/schedule" className="btn inline-flex items-center gap-2">
+              Open Today’s Booking Schedule
+            </Link>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <p className="text-sm text-slate-500">Resources booked today</p>
+              <div className="mt-3 text-3xl font-semibold text-slate-900">{resources.length}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <p className="text-sm text-slate-500">Total approved bookings</p>
+              <div className="mt-3 text-3xl font-semibold text-slate-900">{todayBookings.length}</div>
+            </div>
+          </div>
+          {resources.length === 0 && (
+            <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-6 text-sm text-slate-500">
+              No approved bookings are scheduled for today. Use the schedule page to see upcoming bookings and times.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main grid */}
@@ -338,7 +393,7 @@ export default function Dashboard() {
         <div className="space-y-5">
 
           {/* Quick Stats Snapshot */}
-          <div className="card bg-gradient-to-br from-slate-900 to-slate-800 border-slate-700 text-white">
+          <div className="card bg-linear-to-br from-slate-900 to-slate-800 border-slate-700 text-white">
             <h2 className="font-bold text-slate-200 mb-4 text-sm uppercase tracking-wider">System Snapshot</h2>
             <div className="space-y-3">
               {[

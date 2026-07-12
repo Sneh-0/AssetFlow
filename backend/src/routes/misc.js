@@ -10,7 +10,7 @@ router.use(requireAuth);
 router.get('/dashboard', ah(async (req, res) => {
   const isManager = ['admin', 'asset_manager'].includes(req.user.role);
 
-  const [kpis, overdue, upcoming, pendingBookings, myAssets, recentActivity] = await Promise.all([
+  const [kpis, overdue, upcoming, pendingBookings, myAssets, recentActivity, bookingTimeline] = await Promise.all([
     query(`SELECT
       (SELECT COUNT(*) FROM assets WHERE status = 'available') AS assets_available,
       (SELECT COUNT(*) FROM assets WHERE status = 'allocated') AS assets_allocated,
@@ -55,6 +55,16 @@ router.get('/dashboard', ah(async (req, res) => {
            FROM activity_logs l
            LEFT JOIN users u ON u.id = l.user_id
            ORDER BY l.created_at DESC LIMIT 10`),
+    query(`SELECT b.id, b.start_time, b.end_time, b.purpose,
+                 a.name AS asset_name, a.asset_tag,
+                 u.name AS booked_by_name
+           FROM bookings b
+           JOIN assets a ON a.id = b.asset_id
+           LEFT JOIN users u ON u.id = b.booked_by
+           WHERE b.status = 'approved'
+             AND b.start_time < CURRENT_DATE + INTERVAL '1 day'
+             AND b.end_time >= CURRENT_DATE
+           ORDER BY b.start_time ASC`),
   ]);
 
   const dashboardKpis = kpis.rows[0] || {};
@@ -64,6 +74,7 @@ router.get('/dashboard', ah(async (req, res) => {
     pending_bookings: pendingBookings.rows,
     my_assets: myAssets.rows,
     recent_activity: recentActivity.rows,
+    booking_timeline: bookingTimeline.rows,
     overdue_returns: overdue.rows,
     upcoming_returns: upcoming.rows,
   });
@@ -89,7 +100,7 @@ router.get('/activity', ah(async (req, res) => {
 
 // Reports & Analytics (Screen 9) — starter queries; P4 extends these
 router.get('/reports', ah(async (req, res) => {
-  const [byStatus, byDept, maintFreq, mostUsed] = await Promise.all([
+  const [byStatus, byDept, maintFreq, mostUsed, bookingHeatmap] = await Promise.all([
     query(`SELECT status, COUNT(*)::int AS count FROM assets GROUP BY status ORDER BY count DESC`),
     query(`SELECT COALESCE(d.name, ud.name, 'Unassigned') AS department, COUNT(*)::int AS count
            FROM allocations al
@@ -103,13 +114,30 @@ router.get('/reports', ah(async (req, res) => {
     query(`SELECT a.asset_tag, a.name, COUNT(al.id)::int AS allocation_count
            FROM assets a LEFT JOIN allocations al ON al.asset_id = a.id
            GROUP BY a.id ORDER BY allocation_count DESC LIMIT 10`),
+    query(`SELECT EXTRACT(DOW FROM b.start_time)::int AS day_of_week,
+                 EXTRACT(HOUR FROM b.start_time)::int AS hour_of_day,
+                 COUNT(*)::int AS booking_count,
+                 COALESCE(json_agg(json_build_object(
+                   'booked_by_name', u.name,
+                   'asset_name', a.name,
+                   'asset_tag', a.asset_tag,
+                   'purpose', b.purpose,
+                   'start_time', b.start_time,
+                   'end_time', b.end_time
+                 ) ORDER BY b.start_time) FILTER (WHERE b.id IS NOT NULL), '[]'::json) AS bookings
+           FROM bookings b
+           JOIN assets a ON a.id = b.asset_id
+           LEFT JOIN users u ON u.id = b.booked_by
+           WHERE b.status = 'approved' AND b.start_time >= CURRENT_DATE - INTERVAL '45 days'
+           GROUP BY 1, 2
+           ORDER BY 1, 2`),
   ]);
   res.json({
     assets_by_status: byStatus.rows,
     department_allocation: byDept.rows,
     maintenance_frequency: maintFreq.rows,
     most_used_assets: mostUsed.rows,
-    // TODO(P4): booking heatmap (bookings grouped by day-of-week + hour), export to CSV
+    bookings_heatmap: bookingHeatmap.rows,
   });
 }));
 

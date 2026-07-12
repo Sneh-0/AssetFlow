@@ -14,6 +14,7 @@ import Audits from './pages/Audits';
 import Reports from './pages/Reports';
 import Notifications from './pages/Notifications';
 import ScanPage from './pages/ScanPage';
+import Schedule from './pages/Schedule';
 
 function Protected({ children, roles }) {
   const { user, loading } = useAuth();
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/audits" element={<Audits />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/notifications" element={<Notifications />} />
+        <Route path="/schedule" element={<Schedule />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
