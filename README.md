@@ -33,6 +33,26 @@ npm install
 npm run dev                   # → http://localhost:5173 (proxies /api to :5000)
 ```
 
+## Deploy to Vercel (production)
+
+The whole repo deploys as **one Vercel project**: the React app is served as static
+files and the Express API runs as a serverless function under `/api` — so the
+frontend and API share a single domain (no CORS, no separate backend host).
+
+1. Make sure the Supabase schema is set up (see the section above).
+2. Push this repo to GitHub, then on [vercel.com](https://vercel.com) → **Add New → Project** → import it.
+   Leave the root directory as the repo root; `vercel.json` handles the build.
+3. In **Project Settings → Environment Variables**, add (see `.env.example`):
+   - `DATABASE_URL` — the Supabase **Transaction pooler** string (port **6543**), which is
+     the right one for serverless. Append `?sslmode=require` if not already present.
+   - `JWT_SECRET` — a long random string (e.g. `openssl rand -hex 32`).
+   - *(optional)* `CORS_ORIGIN` — only if you split the API onto another domain.
+4. **Deploy.** The frontend calls the API at the relative path `/api`, so it works as soon
+   as the deploy is live. Health check: `https://<your-app>.vercel.app/api/health`.
+
+Wiring lives in `vercel.json` (build + SPA fallback), `api/[...path].js` (serverless entry),
+and the root `package.json` (API dependencies Vercel installs for the function).
+
 **Demo logins** (seeded):
 
 | Email | Password | Role |
