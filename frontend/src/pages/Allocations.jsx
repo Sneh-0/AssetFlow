@@ -107,7 +107,7 @@ export default function Allocations() {
 
       {conflict && (
         <div className="card border-amber-300 bg-amber-50 flex items-center justify-between">
-          <span className="text-sm text-amber-800">🚫 {conflict.message}</span>
+          <span className="text-sm text-amber-800">{conflict.message}</span>
           <button className="btn" onClick={requestTransfer}>Request Transfer Instead</button>
         </div>
       )}

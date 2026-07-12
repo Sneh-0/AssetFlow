@@ -267,7 +267,13 @@ export default function AssetDetail() {
       <div className="card flex gap-5">
         {asset.image_url
           ? <img src={asset.image_url} alt={asset.name} className="h-28 w-28 object-cover rounded-lg border flex-shrink-0" />
-          : <div className="h-28 w-28 rounded-lg border bg-gray-100 flex items-center justify-center text-gray-300 text-3xl flex-shrink-0">📦</div>
+          : (
+              <div className="h-28 w-28 rounded-lg border bg-gray-100 flex items-center justify-center flex-shrink-0">
+                <svg className="h-10 w-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+              </div>
+            )
         }
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 flex-wrap">

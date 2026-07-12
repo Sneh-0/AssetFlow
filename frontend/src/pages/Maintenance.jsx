@@ -9,6 +9,8 @@ export default function Maintenance() {
   const [assets, setAssets] = useState([]);
   const [form, setForm] = useState({ asset_id: '', issue: '', priority: 'medium' });
   const [error, setError] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
 
   const load = () => {
     api('/maintenance').then(setRequests);
@@ -64,6 +66,50 @@ export default function Maintenance() {
         </div>
         <button className="btn">Raise Request</button>
       </form>
+
+      {/* Role-based Filter Controls for Admin and Asset Managers */}
+      {isManager && (
+        <div className="flex flex-wrap gap-4 items-center justify-between bg-white p-4 rounded-xl border border-gray-200">
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider mr-2">Filter Status:</span>
+            {[
+              { id: 'all', label: 'All Requests' },
+              { id: 'pending', label: 'Pending' },
+              { id: 'approved', label: 'Approved' },
+              { id: 'active', label: 'Under Repair' },
+              { id: 'resolved', label: 'Resolved' },
+              { id: 'rejected', label: 'Rejected' }
+            ].map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setStatusFilter(f.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                  statusFilter === f.id
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Priority:</span>
+            <select
+              className="input max-w-[150px] !py-1"
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
+            >
+              <option value="all">All Priorities</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+        </div>
+      )}
 
       <div className="card p-0 overflow-x-auto">
         <table className="w-full">

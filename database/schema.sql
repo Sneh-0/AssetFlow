@@ -94,7 +94,7 @@ CREATE TABLE bookings (
   start_time TIMESTAMPTZ NOT NULL,
   end_time   TIMESTAMPTZ NOT NULL,
   purpose    TEXT,
-  status     TEXT NOT NULL DEFAULT 'upcoming' CHECK (status IN ('upcoming','ongoing','completed','cancelled')),
+  status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','cancelled')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (end_time > start_time)
 );

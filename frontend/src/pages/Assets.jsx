@@ -164,7 +164,14 @@ export default function Assets() {
                     {a.asset_tag}
                   </Link>
                 </td>
-                <td className="td">{a.name}{a.is_bookable && ' 📅'}</td>
+                <td className="td">
+                  <span>{a.name}</span>
+                  {a.is_bookable && (
+                    <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase tracking-wider">
+                      Bookable
+                    </span>
+                  )}
+                </td>
                 <td className="td">{a.category_name}</td>
                 <td className="td"><span className={`badge ${STATUS_COLORS[a.status]}`}>{a.status.replace('_', ' ')}</span></td>
                 <td className="td">{a.holder_name || a.holder_department || '—'}</td>
