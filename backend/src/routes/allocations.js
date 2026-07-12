@@ -81,7 +81,8 @@ router.post('/:id/return', ah(async (req, res) => {
 router.get('/transfers', ah(async (req, res) => {
   const { rows } = await query(
     `SELECT t.*, a.asset_tag, a.name AS asset_name, rb.name AS requested_by_name,
-            te.name AS to_employee_name, td.name AS to_department_name, db.name AS decided_by_name
+            te.name AS to_employee_name, te.department_id AS to_employee_dept_id,
+            td.name AS to_department_name, db.name AS decided_by_name
      FROM transfer_requests t
      JOIN assets a ON a.id = t.asset_id
      JOIN users rb ON rb.id = t.requested_by

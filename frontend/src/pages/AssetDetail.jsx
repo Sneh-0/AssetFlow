@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
+import { jsPDF } from 'jspdf';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 
@@ -45,7 +46,6 @@ export default function AssetDetail() {
   const [edit, setEdit] = useState({});
   const [imageMode, setImageMode] = useState('url');
   const qrRef = useRef(null);
-  const [activePhoto, setActivePhoto] = useState(null);
 
   const reload = () => api(`/assets/${id}`).then((a) => { setAsset(a); setEdit({ name: a.name, condition: a.condition, location: a.location || '', is_bookable: a.is_bookable, image_url: a.image_url || '' }); });
   useEffect(() => { reload(); }, [id]);
@@ -55,16 +55,165 @@ export default function AssetDetail() {
   const canEdit   = ['admin', 'asset_manager'].includes(user.role);
   const canDelete = canEdit;
 
-  const downloadQR = () => {
-    const svg = qrRef.current?.querySelector('svg');
-    if (!svg) return;
-    const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${asset.asset_tag}.svg`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+  // ── PDF helpers ──────────────────────────────────────────────
+  const svgToPngDataUrl = () => new Promise((resolve) => {
+    const svg  = qrRef.current?.querySelector('svg');
+    if (!svg) return resolve(null);
+    const xml  = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([xml], { type: 'image/svg+xml' });
+    const url  = URL.createObjectURL(blob);
+    const img  = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 256;
+      c.getContext('2d').drawImage(img, 0, 0, 256, 256);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.src = url;
+  });
+
+  const downloadQrPdf = async () => {
+    const png = await svgToPngDataUrl();
+    if (!png) return;
+    const doc = new jsPDF({ unit: 'mm', format: [60, 70] });
+    doc.addImage(png, 'PNG', 5, 5, 50, 50);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text(asset.asset_tag, 30, 60, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text(asset.name, 30, 65, { align: 'center', maxWidth: 50 });
+    doc.save(`${asset.asset_tag}-qr.pdf`);
   };
+
+  const downloadFullPdf = async () => {
+    const png = await svgToPngDataUrl();
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const lm = 15, rm = 195, cw = 180;
+    let y = 15;
+
+    const line = () => { doc.setDrawColor(220); doc.line(lm, y, rm, y); y += 5; };
+
+    const field = (label, value) => {
+      if (!value && value !== 0) return;
+      if (y > 272) { doc.addPage(); y = 20; }
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(120);
+      doc.text(label, lm, y);
+      doc.setFontSize(9); doc.setTextColor(30);
+      const lines = doc.splitTextToSize(String(value), cw - 46);
+      doc.text(lines, lm + 45, y);
+      y += lines.length * 5 + 1;
+    };
+
+    const section = (title) => {
+      if (y > 265) { doc.addPage(); y = 20; }
+      y += 3;
+      doc.setFillColor(240, 242, 255); doc.rect(lm, y - 4, cw, 9, 'F');
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 80, 180);
+      doc.text(title, lm + 2, y + 2); y += 10;
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(30);
+    };
+
+    const drawTable = (headers, rows) => {
+      const rowH = 7;
+      doc.setFillColor(225, 228, 255);
+      doc.rect(lm, y - 4, cw, rowH, 'F');
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 80, 180);
+      headers.forEach((h) => doc.text(h.label, h.x, y));
+      y += rowH;
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(30);
+      rows.forEach((cells, ri) => {
+        if (y > 272) { doc.addPage(); y = 20; }
+        if (ri % 2 === 0) { doc.setFillColor(248, 249, 255); doc.rect(lm, y - 4, cw, rowH, 'F'); }
+        doc.setFontSize(8.5);
+        cells.forEach((val, ci) => {
+          doc.text(doc.splitTextToSize(String(val ?? '—'), headers[ci].w - 2), headers[ci].x, y);
+        });
+        y += rowH;
+      });
+      y += 2;
+    };
+
+    // Header
+    doc.setFillColor(63, 81, 181); doc.rect(0, 0, 210, 22, 'F');
+    doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(255);
+    doc.text('Asset Details Report', lm, 14);
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, rm, 14, { align: 'right' });
+    y = 30;
+
+    // QR + basic side by side
+    if (png) { doc.addImage(png, 'PNG', rm - 35, 25, 35, 35); }
+    section('Basic Details');
+    field('Asset Tag',    asset.asset_tag);
+    field('Name',         asset.name);
+    field('Category',     asset.category_name);
+    field('Brand',        asset.brand);
+    field('Model',        asset.model);
+    field('Serial No.',   asset.serial_number);
+    field('Condition',    asset.condition);
+    field('Status',       asset.status.replace(/_/g, ' '));
+    field('Location',     asset.location);
+    field('Bookable',     asset.is_bookable ? 'Yes' : 'No');
+    line();
+
+    section('Purchase Information');
+    field('Purchase Date',   asset.acquisition_date ? new Date(asset.acquisition_date).toLocaleDateString() : null);
+    field('Cost',            asset.acquisition_cost ? `Rs. ${Number(asset.acquisition_cost).toLocaleString()}` : null);
+    field('Vendor',          asset.vendor);
+    field('Warranty Expiry', asset.warranty_expiry ? new Date(asset.warranty_expiry).toLocaleDateString() : null);
+    line();
+
+    section('Allocation History');
+    if (asset.allocations.length === 0) {
+      doc.setFontSize(9); doc.setTextColor(150); doc.text('Never allocated.', lm, y); y += 8;
+    } else {
+      drawTable(
+        [
+          { label: 'Holder',       x: lm,       w: 48 },
+          { label: 'Allocated By', x: lm + 48,  w: 45 },
+          { label: 'From',         x: lm + 93,  w: 30 },
+          { label: 'To',           x: lm + 123, w: 30 },
+          { label: 'Status',       x: lm + 153, w: 27 },
+        ],
+        asset.allocations.map((al) => [
+          al.employee_name || al.department_name || '—',
+          al.allocated_by_name || '—',
+          new Date(al.allocated_at).toLocaleDateString(),
+          al.returned_at ? new Date(al.returned_at).toLocaleDateString() : 'present',
+          al.status,
+        ])
+      );
+    }
+    line();
+
+    section('Maintenance History');
+    if (asset.maintenance.length === 0) {
+      doc.setFontSize(9); doc.setTextColor(150); doc.text('No maintenance records.', lm, y); y += 8;
+    } else {
+      drawTable(
+        [
+          { label: 'Issue',    x: lm,       w: 65 },
+          { label: 'Priority', x: lm + 65,  w: 25 },
+          { label: 'Status',   x: lm + 90,  w: 35 },
+          { label: 'Raised By',x: lm + 125, w: 40 },
+          { label: 'Date',     x: lm + 165, w: 30 },
+        ],
+        asset.maintenance.map((m) => [
+          m.issue,
+          m.priority,
+          m.status.replace(/_/g, ' '),
+          m.raised_by_name,
+          new Date(m.created_at).toLocaleDateString(),
+        ])
+      );
+    }
+
+    doc.save(`${asset.asset_tag}-full-details.pdf`);
+  };
+  // ─────────────────────────────────────────────────────────────
+
 
   const handleFile = async (e) => {
     const file = e.target.files[0];
@@ -165,18 +314,14 @@ export default function AssetDetail() {
         <div>
           <h2 className="font-semibold mb-3 text-sm text-gray-500 uppercase tracking-wide">QR Code</h2>
           <div ref={qrRef}>
-            <QRCodeSVG
-              value={`http://10.85.103.70:5173/scan/${asset.asset_tag}`}
-              size={128}
-              includeMargin
-              level="M"
-            />
+            <QRCodeSVG value={asset.asset_tag} size={128} includeMargin level="M" />
           </div>
         </div>
-        <div className="flex flex-col gap-2 mt-8">
-          <p className="text-xs text-gray-400">Scan to view full asset info</p>
+        <div className="flex flex-col gap-2 mt-6">
+          <p className="text-xs text-gray-400">Use "Scan QR" in the sidebar to scan</p>
           <p className="text-xs font-mono text-gray-500">{asset.asset_tag}</p>
-          <button onClick={downloadQR} className="btn text-sm mt-1">⬇ Download SVG</button>
+          <button onClick={downloadQrPdf} className="btn text-sm">⬇ Download QR PDF</button>
+          <button onClick={downloadFullPdf} className="btn text-sm">⬇ Download Full Details PDF</button>
         </div>
       </div>
 
@@ -239,49 +384,12 @@ export default function AssetDetail() {
         <h2 className="font-semibold mb-2">Maintenance History</h2>
         {asset.maintenance.length === 0 && <p className="text-sm text-gray-400">No maintenance records.</p>}
         {asset.maintenance.map((m) => (
-          <div key={m.id} className="text-sm py-3 border-t border-gray-100 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              {m.photo_url ? (
-                <img
-                  src={m.photo_url}
-                  alt="Issue"
-                  className="h-10 w-10 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-85 transition-opacity"
-                  onClick={() => setActivePhoto(m.photo_url)}
-                />
-              ) : (
-                <div className="h-10 w-10 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-xs text-gray-300 font-bold">
-                  —
-                </div>
-              )}
-              <div>
-                <div className="font-medium text-gray-800">{m.issue}</div>
-                <div className="text-xs text-gray-400">
-                  Priority: <span className="capitalize font-semibold text-gray-500">{m.priority}</span> · raised by {m.raised_by_name}
-                </div>
-              </div>
-            </div>
-            <span className="capitalize text-gray-500 font-medium text-xs bg-gray-100 px-2 py-1 rounded">{m.status.replace('_', ' ')}</span>
+          <div key={m.id} className="text-sm py-2 border-t border-gray-100 flex justify-between">
+            <span>{m.issue} <span className="text-gray-400">({m.priority}, by {m.raised_by_name})</span></span>
+            <span className="capitalize text-gray-500">{m.status.replace('_', ' ')}</span>
           </div>
         ))}
       </div>
-
-      {/* Lightbox Modal for Photo Preview */}
-      {activePhoto && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in"
-          onClick={() => setActivePhoto(null)}
-        >
-          <div className="relative max-w-3xl max-h-[85vh] bg-white p-2 rounded-xl shadow-2xl overflow-hidden">
-            <img src={activePhoto} alt="Maintenance Issue Preview" className="max-w-full max-h-[80vh] object-contain rounded-lg" />
-            <button
-              onClick={() => setActivePhoto(null)}
-              className="absolute top-4 right-4 bg-black/50 text-white rounded-full p-2 hover:bg-black/70 cursor-pointer"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

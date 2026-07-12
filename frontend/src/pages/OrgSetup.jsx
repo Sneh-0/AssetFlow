@@ -1,4 +1,4 @@
-// OWNER: P1 — Admin-only. 4 tabs: Departments / Categories / Employee Directory / Technicians
+// OWNER: P1 — Admin-only. 3 tabs: Departments / Categories / Employee Directory (only place roles change)
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 
@@ -8,7 +8,7 @@ export default function OrgSetup() {
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Organization Setup</h1>
       <div className="flex gap-2">
-        {['departments', 'categories', 'employees', 'technicians'].map((t) => (
+        {['departments', 'categories', 'employees'].map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-lg text-sm font-medium capitalize cursor-pointer ${tab === t ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200'}`}>
             {t}
@@ -18,7 +18,6 @@ export default function OrgSetup() {
       {tab === 'departments' && <Departments />}
       {tab === 'categories' && <Categories />}
       {tab === 'employees' && <Employees />}
-      {tab === 'technicians' && <Technicians />}
     </div>
   );
 }
@@ -155,108 +154,6 @@ function Employees() {
           </tr>
         ))}</tbody>
       </table>
-    </div>
-  );
-}
-
-function Technicians() {
-  const [techs, setTechs] = useState([]);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', specialty: '' });
-  const [error, setError] = useState('');
-
-  const load = () => {
-    api('/technicians')
-      .then(setTechs)
-      .catch(err => setError(err.message));
-  };
-
-  useEffect(load, []);
-
-  const create = async (e) => {
-    e.preventDefault();
-    setError('');
-    try {
-      await api('/technicians', { method: 'POST', body: form });
-      setForm({ name: '', email: '', phone: '', specialty: '' });
-      load();
-    } catch (err) { setError(err.message); }
-  };
-
-  const toggleStatus = async (t) => {
-    setError('');
-    try {
-      await api(`/technicians/${t.id}`, {
-        method: 'PUT',
-        body: { status: t.status === 'active' ? 'inactive' : 'active' }
-      });
-      load();
-    } catch (err) { setError(err.message); }
-  };
-
-  return (
-    <div className="space-y-4">
-      {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{error}</div>}
-      <form onSubmit={create} className="card flex flex-wrap gap-3 items-end">
-        <div className="grow max-w-xs">
-          <label className="text-xs text-gray-500 font-semibold mb-1 block">Name</label>
-          <input className="input" placeholder="Technician name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-        </div>
-        <div className="grow max-w-xs">
-          <label className="text-xs text-gray-500 font-semibold mb-1 block">Email (optional)</label>
-          <input className="input" type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        </div>
-        <div className="grow max-w-xs">
-          <label className="text-xs text-gray-500 font-semibold mb-1 block">Phone (optional)</label>
-          <input className="input" placeholder="Phone number" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-        </div>
-        <div className="grow max-w-xs">
-          <label className="text-xs text-gray-500 font-semibold mb-1 block">Specialty</label>
-          <input className="input" placeholder="Specialty (e.g. HVAC)" value={form.specialty} onChange={(e) => setForm({ ...form, specialty: e.target.value })} />
-        </div>
-        <button className="btn">Add Technician</button>
-      </form>
-
-      <div className="card p-0 overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr>
-              <th className="th">Name</th>
-              <th className="th">Email</th>
-              <th className="th">Phone</th>
-              <th className="th">Specialty</th>
-              <th className="th">Active Workload</th>
-              <th className="th">Status</th>
-              <th className="th">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {techs.map((t) => (
-              <tr key={t.id}>
-                <td className="td font-medium text-gray-800">{t.name}</td>
-                <td className="td">{t.email || '—'}</td>
-                <td className="td">{t.phone || '—'}</td>
-                <td className="td capitalize">{t.specialty || 'General'}</td>
-                <td className="td text-indigo-600 font-semibold">{t.active_requests_count} active jobs</td>
-                <td className="td">
-                  <span className={`badge ${t.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-500'}`}>
-                    {t.status}
-                  </span>
-                </td>
-                <td className="td">
-                  <button className="btn-secondary text-xs uppercase" onClick={() => toggleStatus(t)}>
-                    {t.status === 'active' ? 'Deactivate' : 'Activate'}
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {techs.length === 0 && (
-              <tr>
-                <td colSpan="7" className="p-4 text-sm text-gray-400 text-center">No technicians registered.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

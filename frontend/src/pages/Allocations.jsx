@@ -61,6 +61,21 @@ export default function Allocations() {
 
   const canManage = ['admin', 'asset_manager', 'dept_head'].includes(user.role);
 
+  // Dept head can only approve/reject transfers where the destination is their department
+  const canDecideTransfer = (t) => {
+    if (['admin', 'asset_manager'].includes(user.role)) return true;
+    if (user.role === 'dept_head') {
+      // Allow if the transfer target employee is in their dept, or target dept matches their dept
+      const targetDeptId = t.to_department_id;
+      const targetEmployeeDeptId = t.to_employee_dept_id;
+      return (
+        (targetDeptId && targetDeptId === user.department_id) ||
+        (targetEmployeeDeptId && targetEmployeeDeptId === user.department_id)
+      );
+    }
+    return false;
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Allocations & Transfers</h1>
@@ -123,7 +138,7 @@ export default function Allocations() {
             <span>{t.asset_tag} → {t.to_employee_name || t.to_department_name} <span className="text-gray-400">by {t.requested_by_name}</span></span>
             <span className="flex items-center gap-2">
               <span className={`badge ${t.status === 'pending' ? 'bg-amber-100 text-amber-700' : t.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{t.status}</span>
-              {t.status === 'pending' && canManage && (<>
+              {t.status === 'pending' && canDecideTransfer(t) && (<>
                 <button className="btn-secondary" onClick={() => decideTransfer(t.id, 'approve')}>Approve</button>
                 <button className="btn-secondary" onClick={() => decideTransfer(t.id, 'reject')}>Reject</button>
               </>)}

@@ -9,46 +9,21 @@ router.use(requireAuth);
 
 router.get('/', ah(async (req, res) => {
   const params = [];
-  const where = [];
-
-  if (req.query.status) {
-    params.push(req.query.status);
-    where.push(`m.status = $${params.length}`);
-  }
-
-  if (req.user.role === 'employee') {
-    params.push(req.user.id);
-    where.push(`m.raised_by = $${params.length}`);
-  }
-
-  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
-
+  let where = '';
+  if (req.query.status) { params.push(req.query.status); where = `WHERE m.status = $1`; }
   const { rows } = await query(
-    `SELECT m.*, a.asset_tag, a.name AS asset_name, u.name AS raised_by_name, db.name AS decided_by_name,
-            t.name AS technician_name, t.specialty AS technician_specialty
+    `SELECT m.*, a.asset_tag, a.name AS asset_name, u.name AS raised_by_name, db.name AS decided_by_name
      FROM maintenance_requests m
      JOIN assets a ON a.id = m.asset_id
      JOIN users u ON u.id = m.raised_by
      LEFT JOIN users db ON db.id = m.decided_by
-     LEFT JOIN technicians t ON t.id = m.technician_id
-     ${whereClause} ORDER BY m.created_at DESC`, params);
+     ${where} ORDER BY m.created_at DESC`, params);
   res.json(rows);
 }));
 
 router.post('/', ah(async (req, res) => {
   const { asset_id, issue, priority, photo_url } = req.body;
   if (!asset_id || !issue) return res.status(400).json({ error: 'asset_id and issue are required' });
-
-  if (req.user.role === 'employee') {
-    const { rows } = await query(
-      `SELECT id FROM allocations WHERE asset_id = $1 AND employee_id = $2 AND status = 'active'`,
-      [asset_id, req.user.id]
-    );
-    if (rows.length === 0) {
-      return res.status(403).json({ error: 'Employees can only raise maintenance requests for assets currently allocated to them.' });
-    }
-  }
-
   const { rows: [m] } = await query(
     `INSERT INTO maintenance_requests (asset_id, raised_by, issue, priority, photo_url)
      VALUES ($1, $2, $3, COALESCE($4, 'medium'), $5) RETURNING *`,
@@ -57,9 +32,9 @@ router.post('/', ah(async (req, res) => {
   res.status(201).json(m);
 }));
 
-// Single transition endpoint. body: { action: approve|reject|assign|start|resolve, technician_id? }
+// Single transition endpoint. body: { action: approve|reject|assign|start|resolve, technician? }
 router.put('/:id', ah(async (req, res) => {
-  const { action, technician_id } = req.body;
+  const { action, technician } = req.body;
   const { rows: [m] } = await query(`SELECT * FROM maintenance_requests WHERE id = $1`, [req.params.id]);
   if (!m) return res.status(404).json({ error: 'Request not found' });
 
@@ -75,16 +50,12 @@ router.put('/:id', ah(async (req, res) => {
   if (!t.roles.includes(req.user.role)) return res.status(403).json({ error: 'Only an Asset Manager can do this' });
   if (!t.from.includes(m.status)) return res.status(409).json({ error: `Cannot ${action} a request that is ${m.status}` });
 
-  if (action === 'assign' && !technician_id) {
-    return res.status(400).json({ error: 'technician_id is required for assign action' });
-  }
-
   const { rows: [updated] } = await query(
-    `UPDATE maintenance_requests SET status = $1, technician_id = COALESCE($2, technician_id),
+    `UPDATE maintenance_requests SET status = $1, technician = COALESCE($2, technician),
        decided_by = CASE WHEN $1 IN ('approved','rejected') THEN $3 ELSE decided_by END,
        decided_at = CASE WHEN $1 IN ('approved','rejected') THEN now() ELSE decided_at END,
        resolved_at = CASE WHEN $1 = 'resolved' THEN now() ELSE resolved_at END
-     WHERE id = $4 RETURNING *`, [t.to, technician_id || null, req.user.id, req.params.id]);
+     WHERE id = $4 RETURNING *`, [t.to, technician || null, req.user.id, req.params.id]);
 
   // Asset status auto-updates: Under Maintenance on approval, back to Available on resolution
   if (t.to === 'approved') await query(`UPDATE assets SET status = 'under_maintenance' WHERE id = $1`, [m.asset_id]);
@@ -95,7 +66,7 @@ router.put('/:id', ah(async (req, res) => {
   }
 
   await notify(m.raised_by, `maintenance_${t.to}`, `Your maintenance request #${m.id} is now ${t.to.replace('_', ' ')}`);
-  await logActivity(req.user.id, `maintenance.${t.to}`, 'asset', m.asset_id, technician_id ? String(technician_id) : null);
+  await logActivity(req.user.id, `maintenance.${t.to}`, 'asset', m.asset_id, technician);
   res.json(updated);
 }));
 

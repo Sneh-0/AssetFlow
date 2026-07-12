@@ -29,8 +29,11 @@ export default function Assets() {
   const { user } = useAuth();
   const [assets, setAssets] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
+  const [dept, setDept] = useState('');
+  const [location, setLocation] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState('');
@@ -39,11 +42,16 @@ export default function Assets() {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     if (status) params.set('status', status);
+    if (dept) params.set('department', dept);
+    if (location) params.set('location', location);
     api(`/assets?${params}`).then(setAssets).catch((e) => setError(e.message));
   };
 
-  useEffect(load, [q, status]);
-  useEffect(() => { api('/org/categories').then(setCategories); }, []);
+  useEffect(load, [q, status, dept, location]);
+  useEffect(() => {
+    api('/org/categories').then(setCategories);
+    api('/org/departments').then(setDepartments);
+  }, []);
 
   const handleFile = async (e) => {
     const file = e.target.files[0];
@@ -122,12 +130,23 @@ export default function Assets() {
         </form>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <input className="input max-w-xs" placeholder="Search tag / serial / name…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="input max-w-45" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select className="input w-40" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">All statuses</option>
           {Object.keys(STATUS_COLORS).map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
         </select>
+        <select className="input w-44" value={dept} onChange={(e) => setDept(e.target.value)}>
+          <option value="">All departments</option>
+          {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+        <input className="input w-36" placeholder="Location…" value={location} onChange={(e) => setLocation(e.target.value)} />
+        {(q || status || dept || location) && (
+          <button className="btn bg-gray-100 text-gray-600 hover:bg-gray-200 text-sm"
+            onClick={() => { setQ(''); setStatus(''); setDept(''); setLocation(''); }}>
+            Clear filters
+          </button>
+        )}
       </div>
 
       <div className="card overflow-x-auto p-0">
