@@ -181,11 +181,11 @@ export default function Maintenance() {
             <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider mr-2">Filter Status:</span>
             {[
               { id: 'all', label: 'All Requests' },
-              { id: 'pending', label: '⏳ Pending' },
-              { id: 'approved', label: '✅ Approved' },
-              { id: 'active', label: '🔧 Under Repair' },
-              { id: 'resolved', label: '✨ Resolved' },
-              { id: 'rejected', label: '❌ Rejected' }
+              { id: 'pending', label: 'Pending' },
+              { id: 'approved', label: 'Approved' },
+              { id: 'active', label: 'Under Repair' },
+              { id: 'resolved', label: 'Resolved' },
+              { id: 'rejected', label: 'Rejected' }
             ].map((f) => (
               <button
                 key={f.id}
