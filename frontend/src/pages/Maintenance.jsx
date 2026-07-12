@@ -44,6 +44,7 @@ export default function Maintenance() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [activePhoto, setActivePhoto] = useState(null);
+  const fileInputRef = useRef(null);
 
   // Technician assignment modal
   const [technicians, setTechnicians] = useState([]);
